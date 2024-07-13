@@ -5,21 +5,33 @@ const connectToDatabase = require('../db');
 const { ObjectId } = require('mongodb');
 // Route to get all employees
 router.get("/all_employees", async (req, res) => {
-    const { client,database, employees,job } = await connectToDatabase();
+    const { client, employees } = await connectToDatabase();
     try {
-        
-        // Query all employees
-        const allEmployees = await employees.find({}).toArray();
-        
-        res.status(200).send(allEmployees);
-        console.log("Fetched all employees:", allEmployees);
+        const page = parseInt(req.query.page) || 1;
+        const limit = 20;
+        const skip = (page - 1) * limit;
+
+        // Query employees with pagination
+        const allEmployees = await employees.find({})
+            .skip(skip)
+            .limit(limit)
+            .toArray();
+
+        // Get total count of employees
+        const totalEmployees = await employees.countDocuments();
+
+        res.status(200).send({
+            employees: allEmployees,
+            currentPage: page,
+            totalPages: Math.ceil(totalEmployees / limit),
+            totalEmployees
+        });
+        console.log("Fetched paginated employees:", allEmployees);
     } catch (error) {
         console.error("Error fetching employees:", error);
         res.status(500).send({ message: "An error occurred while fetching employees" });
     } finally {
-       
         await client.close(); // Close the client connection
-        
     }
 });
 
