@@ -95,18 +95,16 @@ router.get("/search", async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = 20;
     const skip = (page - 1) * limit;
-    const searchQuery = req.query.q || "";
+    const searchQuery = req.query.q;
 
     // Create a search filter
-    const searchFilter = searchQuery
-      ? {
-          $or: [
-            { name: { $regex: searchQuery, $options: "i" } },
-            { email: { $regex: searchQuery, $options: "i" } },
-            { jobRole: { $regex: searchQuery, $options: "i" } },
-          ],
-        }
-      : {};
+    const searchFilter = {
+      $or: [
+        { name: { $regex: searchQuery, $options: "i" } },
+        { email: { $regex: searchQuery, $options: "i" } },
+        { jobRole: { $regex: searchQuery, $options: "i" } },
+      ],
+    };
 
     // Query employees with pagination and search
     const searchResults = await employees
@@ -142,6 +140,45 @@ router.get("/search", async (req, res) => {
     res
       .status(500)
       .json({ message: "An error occurred while searching employees" });
+  } finally {
+    await client.close(); // Close the client connection
+  }
+});
+
+router.post("/add_employee", async (req, res) => {
+  const { client, employees } = await connectToDatabase();
+  try {
+    const newEmployee = req.body;
+
+    // Check if required fields are present
+    if (!newEmployee.email || !newEmployee.name) {
+      return res.status(400).json({ message: "Email and name are required fields" });
+    }
+
+    // Check if an employee with the same email already exists
+    const existingEmployee = await employees.findOne({ email: newEmployee.email });
+    if (existingEmployee) {
+      return res.status(409).json({ message: "An employee with this email already exists" });
+    }
+
+    // Add creation timestamp
+    newEmployee.createdAt = new Date();
+
+    // Insert the new employee
+    const result = await employees.insertOne(newEmployee);
+
+    if (result.insertedId) {
+      res.status(201).json({
+        message: "Employee added successfully",
+        employeeId: result.insertedId
+      });
+      console.log("Added new employee:", result.insertedId);
+    } else {
+      res.status(500).json({ message: "Failed to add employee" });
+    }
+  } catch (error) {
+    console.error("Error adding employee:", error);
+    res.status(500).json({ message: "An error occurred while adding the employee" });
   } finally {
     await client.close(); // Close the client connection
   }
